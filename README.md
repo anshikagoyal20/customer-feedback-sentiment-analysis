@@ -1,138 +1,133 @@
-# Customer Sentiment Analysis & Trend Analysis
+# 📊 Customer Sentiment Analysis & Trend Analysis
 
-An interview-friendly machine learning project that loads Amazon customer reviews with PySpark, derives sentiment from ratings, trains a TF-IDF plus multiclass Logistic Regression model, produces dataset-backed analysis, and optionally stores predictions in MySQL.
+A local ML pipeline that classifies Amazon customer reviews as Negative, Neutral, or Positive and turns them into business insights by product, brand, category, and date. Built for data teams, product managers, or anyone who wants to convert raw customer feedback into sentiment trends and predictions without standing up a hosted service.
 
-## Problem and Objective
+## ✨ Key Features
 
-Customer reviews contain useful feedback but are difficult to summarize manually. This project classifies reviews into Negative, Neutral, and Positive sentiment and supports trend analysis by rating, product category, brand, and date.
+- **Rating-Derived Sentiment Classification** — Automatically labels reviews as Negative (1–2 stars), Neutral (3 stars), or Positive (4–5 stars) based on rating data.
+- **PySpark Data Pipeline** — Loads, cleans, parses dates, filters, and deduplicates large CSV review datasets at scale.
+- **TF-IDF + Logistic Regression Model** — Uses unigram/bigram TF-IDF vectorization with a balanced multiclass Logistic Regression classifier for sentiment prediction.
+- **Business Analytics Reports** — Generates CSV reports, JSON metrics, confusion matrices, sentiment charts, and negative-term analysis by category, brand, and month.
+- **Interactive Streamlit Dashboard** — Explore a Business Dashboard, Product Analysis view, and live New Review Prediction tool.
+- **Optional MySQL Persistence** — Store predictions in a database for historical, query-driven analytics.
 
-The canonical input is `data/Datafiniti_Amazon_Consumer_Reviews_of_Amazon_Products_May19.csv` (28,332 rows, 24 columns). The raw CSV is never modified.
+## 🛠️ Tech Stack
 
-The raw CSV files are intentionally excluded from Git because they are large local data assets. Obtain the verified Datafiniti Amazon customer-review export separately and place the canonical May 2019 file at the path above before running the pipeline. The repository includes `DATASET_ANALYSIS.md` with the inspected schema, quality checks, and file-selection rationale.
+| Component | Technology |
+|-----------|-----------|
+| **Backend & ML** | Python 3.12, PySpark 3.5.6, pandas, scikit-learn, joblib |
+| **Frontend** | Streamlit 1.41.1, Matplotlib, Seaborn |
+| **Database/Services** | MySQL, MySQL Connector/Python, python-dotenv |
 
-Important fields include `reviews.text`, `reviews.title`, `reviews.rating`, `reviews.date`, `name`, `brand`, `primaryCategories`, and `categories`. The selected file contains 65 products, 3 brands, and 9 primary categories.
+## 📦 Installation & Setup
 
-## Important Label Limitation
+### Prerequisites
 
-The dataset has no human sentiment-label column. Labels are derived from the customer rating:
+- Python 3.12
+- Java 8 or newer (required for local Spark)
+- MySQL (only needed for the dashboard, database persistence, or database-backed analytics)
+- The canonical dataset placed at `data/Datafiniti_Amazon_Consumer_Reviews_of_Amazon_Products_May19.csv`
 
-- Ratings 1-2: `Negative`
-- Rating 3: `Neutral`
-- Ratings 4-5: `Positive`
-
-These are rating-derived proxy labels, not independently human-annotated sentiment labels. The dataset is highly imbalanced: Positive is the majority class. The model uses a stratified split and `class_weight="balanced"`; metrics include macro and weighted scores.
-
-## Architecture
-
-```text
-Raw CSV
-  -> PySpark load and cleaning
-  -> date parsing, deduplication, rating-derived labels
-  -> title + review text normalization
-  -> stratified train/test split
-  -> training-only TF-IDF fit
-  -> multiclass Logistic Regression
-  -> evaluation and predictions
-  -> figures and trend tables
-  -> optional MySQL storage
-```
-
-## Technologies
-
-Python, PySpark, scikit-learn, TF-IDF, Logistic Regression, pandas, Matplotlib, Seaborn, MySQL Connector/Python, pytest.
-
-## Preprocessing and Modeling
-
-PySpark reads only the May 2019 CSV, selects useful columns, removes unusable rows and exact duplicates, parses `reviews.date` to a date, and generates a stable SHA-256 review key. Missing review text is treated as empty and filtered if it remains empty.
-
-Titles and bodies are combined. Text is lowercased, URLs and punctuation are removed, whitespace is normalized, and common stopwords are removed while preserving negation words such as `not`, `never`, and `no`. No aggressive stemming or lemmatization is used.
-
-TF-IDF uses unigrams and bigrams, `min_df=2`, `max_features=20000`, and sublinear term frequency. The vectorizer is fit only on training text to prevent leakage. Logistic Regression uses the `lbfgs` solver, `max_iter=1000`, L2 regularization by default, `class_weight="balanced"`, and a reproducible random seed. SciPy is pinned to `1.15.3` because scikit-learn `1.6.1` passes an `iprint` option to L-BFGS that newer SciPy releases reject with an `OptimizeWarning`; this keeps the existing model configuration and behavior unchanged.
-
-## Installation
-
-Use Python 3.12 and Java 8 or 11+ for local Spark. From the repository root:
+### On Windows (PowerShell):
 
 ```powershell
+# Create and activate a virtual environment
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# Install dependencies
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+
+# (Optional) Configure MySQL
+Copy-Item .env.example .env
+# Edit .env with your MySQL credentials, then:
+mysql -u your_username -p < sql/schema.sql
 ```
 
-## Run the Project
+### On macOS/Linux:
 
-```powershell
+```bash
+# Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+# (Optional) Configure MySQL
+cp .env.example .env
+# Edit .env with your MySQL credentials, then:
+mysql -u your_username -p < sql/schema.sql
+```
+
+## 🚀 Quick Start
+
+Run the local pipeline to train the model and generate reports:
+
+```bash
 python run_pipeline.py
 ```
 
-This creates real local artifacts under `models/`, `outputs/figures/`, and `outputs/reports/`, including `metrics.json`, `test_predictions.csv`, category summaries, monthly sentiment counts, and six figures. Generated artifacts are ignored by Git.
+To also persist predictions to MySQL:
 
-Run the database-backed business analytics separately after the predictions have been stored in MySQL:
-
-```powershell
-python run_analytics.py
-```
-
-This uses SQL aggregation over `review_predictions` and writes `outputs/reports/business_insights.md`, CSV summary tables, and `analytics_*.png` figures. Category, brand, product, and qualifying-month comparisons use a minimum of 30 reviews to reduce small-sample distortion. The report describes associations in the data and does not claim causation.
-
-## Streamlit Application
-
-The lightweight Streamlit presentation layer reads live values from the existing MySQL `review_predictions` table and does not alter the training pipeline or database schema. It has three tabs:
-
-- Business Dashboard: overall sentiment, category, brand, product, monthly trend, and negative-term views.
-- Product Analysis: dynamically populated product selector, sentiment breakdown, real negative reviews, and product-specific terms.
-- New Review Prediction: inference with the saved TF-IDF vectorizer and Logistic Regression model without retraining.
-
-Configure the existing project-root `.env` with the MySQL variables described below, then launch from the repository root:
-
-```powershell
-streamlit run app.py
-```
-
-The app handles database connection failures with an in-app message and never displays credentials. Product and analytics values are queried dynamically; no report values are hardcoded.
-
-Run tests with:
-
-```powershell
-python -m pytest -q
-```
-
-## Predict a New Review
-
-After the model artifacts exist, run the root-level inference script:
-
-```powershell
-python predict.py
-```
-
-Enter one new review when prompted. The script reuses the saved TF-IDF vectorizer and Logistic Regression model, applies the same preprocessing as training, and uses `transform()` only; it does not retrain the model.
-
-## MySQL Integration
-
-MySQL is optional and is not required to train or evaluate the model. Copy `.env.example` to `.env`, fill in the connection values, start MySQL, and run `sql/schema.sql`. Then load the environment variables in the shell and run:
-
-```powershell
+```bash
 python run_pipeline.py --mysql
 ```
 
-The writer uses `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, and `MYSQL_PASSWORD`. Credentials are never stored in source code. Useful demonstration queries are in `sql/analysis_queries.sql`.
+Launch the dashboard (requires MySQL populated with the `review_predictions` table):
 
-## Project Structure
-
-```text
-data/                 immutable raw CSV files
-src/data_processing/  PySpark loading, cleaning, and labels
-src/nlp/              reusable text normalization
-src/models/           TF-IDF and Logistic Regression training
-src/analysis/         figures and trend tables
-src/database/         optional MySQL writer
-sql/                  schema and analysis queries
-tests/                focused transformation tests
-app.py                Streamlit presentation layer
-models/               locally generated model artifacts
-outputs/              locally generated figures and reports
+```bash
+streamlit run app.py
 ```
 
-## Limitations and Future Improvements
+Access it at the local URL printed in your terminal (typically `http://localhost:8501`). There is currently no hosted deployment — the project runs entirely locally.
 
-The target labels reflect star ratings, so the model measures agreement with the rating-derived scheme rather than independent sentiment truth. Positive reviews dominate, and repeated generic review text requires conservative deduplication. Future work could add human-reviewed labels, time-based validation, calibrated probabilities, richer aspect-level feedback extraction, and scheduled database refreshes.
+### First Time Using It
 
-No accuracy or trend result is claimed in this README. Run the pipeline to calculate metrics from the actual local dataset.
+1. Run `python run_pipeline.py` to clean the data, train the model, and generate reports and figures.
+2. Run `python -m pytest -q` to confirm the test suite passes (6 tests).
+3. If you want database features, configure `.env` and load the schema via `sql/schema.sql`.
+4. Run `python run_pipeline.py --mysql` to write predictions into MySQL.
+5. Launch the dashboard with `streamlit run app.py`.
+6. In **Business Dashboard**, review overall sentiment and category/month trends.
+7. In **Product Analysis**, select a product to inspect sentiment counts, negative terms, and recent reviews, then try **New Review Prediction** on a custom review.
+
+### Using Custom Data
+
+The pipeline expects the raw CSV to follow the Datafiniti Amazon Reviews export format. Key columns used include:
+
+| Column Name | Description |
+|-------------|-------------|
+| `reviews.rating` | Star rating (1–5), used to derive the sentiment label |
+| `reviews.text` | Full text of the customer review |
+| `reviews.date` | Date the review was submitted |
+| `name` / `brand` | Product name and brand, used for grouping in analytics |
+| `categories` | Product category, used for category-level trend reports |
+
+Raw CSV files should be treated as immutable input data and are excluded from Git due to size. Place your file at `data/Datafiniti_Amazon_Consumer_Reviews_of_Amazon_Products_May19.csv` before running the pipeline.
+
+## 📁 Project Structure
+
+```
+customer-feedback-sentiment-analysis/
+├── app.py
+├── predict.py
+├── run_pipeline.py
+├── run_analytics.py
+├── requirements.txt
+├── DATASET_ANALYSIS.md
+├── data/
+├── data_processing/
+├── nlp/
+├── models/
+├── analysis/
+├── database/
+├── sql/
+│   ├── schema.sql
+│   └── analysis_queries.sql
+├── tests/
+├── outputs/
+└── notebooks/
+```
